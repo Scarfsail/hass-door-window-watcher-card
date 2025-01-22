@@ -1,4 +1,4 @@
-# Home Assistant's Scalable Picture Elements
+# Home Assistant's Door Window Watcher Card
 
 ## About
 A companion card for [Door Window Watcher Integration](https://github.com/Scarfsail/hass-door-window-watcher).
