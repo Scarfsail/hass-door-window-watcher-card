@@ -7,7 +7,7 @@ export default defineConfig(({ mode }) => {
        // root: 'src',
         build: {
             lib: {
-                entry: "./src/app.ts",
+                entry: "./src/door-window-watcher-card.ts",
                 formats: ["es"],
                 fileName: () => `door-window-watcher-card-${isProduction ? "prod" : "dev"}.js`, // Force .js extension                
             },

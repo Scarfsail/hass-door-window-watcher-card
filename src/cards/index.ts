@@ -1,1 +1,0 @@
-export * from "./door-window-watcher-card"
