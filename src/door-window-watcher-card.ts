@@ -1,5 +1,5 @@
 import { CSSResultGroup, LitElement, TemplateResult, css, html } from "lit-element"
-import { customElement, property } from "lit/decorators.js";
+import { customElement, property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "../hass-frontend/src/types";
 import type { LovelaceCard } from "../hass-frontend/src/panels/lovelace/types";
 import type { LovelaceCardConfig } from "../hass-frontend/src/data/lovelace/config/card";
@@ -8,6 +8,7 @@ import dayjs from "dayjs";
 import duration from 'dayjs/plugin/duration'
 import { getDurationMmSs } from "./time_utils";
 import { classMap } from "lit/directives/class-map.js";
+import { keyed } from 'lit/directives/keyed.js';
 
 dayjs.extend(duration);
 
@@ -27,6 +28,7 @@ export class DoorWindowWatcherCard extends LitElement implements LovelaceCard {
     getCardSize() {
         return this.config?.card_size ?? 1;
     }
+
 
     public static async getStubConfig(hass: HomeAssistant): Promise<Partial<DoorWindowWatcherCardConfig>> {
         return {
@@ -84,14 +86,35 @@ export class DoorWindowWatcherCard extends LitElement implements LovelaceCard {
             return `Entity ${this.config.entity} not found`;
         }
 
-        const open_sensors = entity.attributes.open_sensors as OpenSensorInfo[];
+        const open_sensors = this.sortSensors(entity.attributes.open_sensors as OpenSensorInfo[])
+
         return html`
             <ha-card>
                 <div>
-                    ${open_sensors.map(sensor => this.renderSensor(sensor))}
+                    ${open_sensors.map(sensor => keyed(sensor.entity_id, this.renderSensor(sensor)))}
                 </div>
             </ha-card>
         `
+    }
+
+    private sortSensors(sensors: OpenSensorInfo[]) {
+        return sensors.sort((a, b) => {
+            if (a.alert_triggered && !b.alert_triggered)
+                return -1;
+            if (!a.alert_triggered && b.alert_triggered)
+                return 1;
+
+            if (a.remaining_seconds > 0 && b.remaining_seconds > 0)
+                return a.remaining_seconds - b.remaining_seconds
+
+            if (a.remaining_seconds > 0)
+                return -1;
+            
+            if (b.remaining_seconds > 0)
+                return 1;
+
+            return a.opened_at > b.opened_at ? 1 : -1;
+        });
     }
 
     private renderSensor(sensor: OpenSensorInfo) {
@@ -109,7 +132,7 @@ export class DoorWindowWatcherCard extends LitElement implements LovelaceCard {
                 </span>
             </div>
                 <div class="sensor-actions">
-                    <span class=${classMap({...color_class, "animate-fading": sensor.alert_triggered})}>
+                    <span class=${classMap({ ...color_class, "animate-fading": sensor.alert_triggered })}>
                         ${sensor.remaining_seconds > 0 || sensor.alert_triggered ? html`<ha-icon icon="mdi:alert-circle"></ha-icon>` : ""}
                         <span>${getDurationMmSs(dayjs().subtract(sensor.remaining_seconds, "second"))}</span>
                     </span>            
