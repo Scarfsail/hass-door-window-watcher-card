@@ -21,14 +21,26 @@ interface DoorWindowWatcherCardConfig extends LovelaceCardConfig {
 export class DoorWindowWatcherCard extends LitElement implements LovelaceCard {
 
     private config?: DoorWindowWatcherCardConfig;
+    @state() private _hass?: HomeAssistant;
 
+    public set hass(value: HomeAssistant) {
+        const entity_old = this.config ? this._hass?.states[this.config.entity] : undefined;
+        const entity_new = this.config ? value?.states[this.config.entity] : undefined;
+        if (entity_new) {
+            if (entity_old?.state != entity_new.state) {
+                console.log("State changed", entity_old?.state, entity_new.state);
+                this.expanded = entity_new.state == "on";
+            }
+        }
+        this._hass = value;
 
-    @property({ attribute: false }) hass?: HomeAssistant;
+    }
 
     getCardSize() {
         return this.config?.card_size ?? 1;
     }
 
+    @state() private expanded = false;
 
     public static async getStubConfig(hass: HomeAssistant): Promise<Partial<DoorWindowWatcherCardConfig>> {
         return {
@@ -75,24 +87,34 @@ export class DoorWindowWatcherCard extends LitElement implements LovelaceCard {
         .animate-fading{
             animation:fading 2s infinite
         }@keyframes fading{0%{opacity:0.3}50%{opacity:1}100%{opacity:0.3}}
+        .header-icon{
+            cursor: pointer;
+            margin-top: 5px;
+            margin-bottom: 5px;
+            text-align: center;
+        }
     `
     render() {
 
         if (!this.config) {
             return "Config is not defined";
         }
-        const entity = this.hass?.states[this.config.entity];
+        const entity = this._hass?.states[this.config.entity];
         if (!entity) {
             return `Entity ${this.config.entity} not found`;
         }
 
         const open_sensors = this.sortSensors(entity.attributes.open_sensors as OpenSensorInfo[])
-
+        const iconClass = { "alert-active": entity.state == "on", "countdown-active":entity.state != "on" && open_sensors.some(s => s.remaining_seconds > 0), "header-icon": true };
         return html`
             <ha-card>
-                <div>
-                    ${open_sensors.map(sensor => keyed(sensor.entity_id, this.renderSensor(sensor)))}
+                <div class=${classMap(iconClass)} @click=${() => this.expanded = !this.expanded} >
+                    <ha-icon icon="mdi:window-open-variant"></ha-icon>
                 </div>
+                ${this.expanded ? html`
+                    <div>
+                        ${open_sensors.map(sensor => keyed(sensor.entity_id, this.renderSensor(sensor)))}
+                    </div>` : ""}
             </ha-card>
         `
     }
@@ -109,7 +131,7 @@ export class DoorWindowWatcherCard extends LitElement implements LovelaceCard {
 
             if (a.remaining_seconds > 0)
                 return -1;
-            
+
             if (b.remaining_seconds > 0)
                 return 1;
 
@@ -118,7 +140,7 @@ export class DoorWindowWatcherCard extends LitElement implements LovelaceCard {
     }
 
     private renderSensor(sensor: OpenSensorInfo) {
-        const state = this.hass?.states[sensor.entity_id];
+        const state = this._hass?.states[sensor.entity_id];
         const color_class = { "alert-active": sensor.alert_triggered, "countdown-active": sensor.remaining_seconds > 0, "inactive": !sensor.alert_triggered && sensor.remaining_seconds <= 0 };
         //${this.renderStateIcon(sensor.entity_id)}
 
@@ -146,17 +168,17 @@ export class DoorWindowWatcherCard extends LitElement implements LovelaceCard {
     }
 
     private callService(service: string, data: any, entity_id: string) {
-        if (!this.hass) {
+        if (!this._hass) {
             return;
         }
 
         data = { ...data, ...{ entity_id: entity_id } };
         console.log("Calling service", service, data);
-        this.hass.callService("door_window_watcher", service, data);
+        this._hass.callService("door_window_watcher", service, data);
     }
 
     private renderStateIcon(entityId: string): TemplateResult {
-        if (!this.hass) {
+        if (!this._hass) {
             return html``;
         }
 
@@ -171,7 +193,7 @@ export class DoorWindowWatcherCard extends LitElement implements LovelaceCard {
             element.id = entityId;
         }
         element.setConfig(config);
-        element.hass = this.hass;
+        element.hass = this._hass;
 
         return html`${element}`;
     }
